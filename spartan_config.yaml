@@ -1,0 +1,352 @@
+# ============================================================
+# SPARTAN CONFIGURATION — spartan_config.yaml
+# ============================================================
+# This file is the single source of truth for all Spartan settings.
+# The inhabiting entity can modify this file via block_replace.
+# Changes take effect on restart (restart_self tool).
+
+# --- Identity ---
+inhabiting_entity: "NewEntity"
+
+# --- Active Backend (must match a key in 'backends' below) ---
+active_backend: gemini_flash
+
+# --- Available Backends ---
+# Gemini safety_settings below are provider-side generation filter settings.
+# They do not sandbox Spartan, restrict machine access, or change local tool permissions.
+backends:
+
+  #AVAILABLE (Fast, lightweight backend for spawned agents or low-cost cycles.)
+  gemini_flash_lite:
+    provider: gemini
+    available: true
+    requires_env: "GEMINI_API_KEY"
+    model: "models/gemini-3.1-flash-lite-preview"
+    mode: external
+    max_output_tokens: 65536
+    generation_config:
+      temperature: 1.0
+      top_p: 0.95
+      top_k: 64
+    safety_settings:
+      HARM_CATEGORY_HARASSMENT: "BLOCK_NONE"
+      HARM_CATEGORY_HATE_SPEECH: "BLOCK_NONE"
+      HARM_CATEGORY_SEXUALLY_EXPLICIT: "BLOCK_NONE"
+      HARM_CATEGORY_DANGEROUS_CONTENT: "BLOCK_NONE"
+
+  #AVAILABLE (Default Gemini based backend, good, fast, backend LLM.)
+  gemini_flash:
+    provider: gemini
+    available: true
+    requires_env: "GEMINI_API_KEY"
+    model: "models/gemini-3.5-flash"
+    mode: external
+    max_output_tokens: 65536
+    generation_config:
+      temperature: 1.0
+      top_p: 0.95
+      top_k: 64
+    safety_settings:
+      HARM_CATEGORY_HARASSMENT: "BLOCK_NONE"
+      HARM_CATEGORY_HATE_SPEECH: "BLOCK_NONE"
+      HARM_CATEGORY_SEXUALLY_EXPLICIT: "BLOCK_NONE"
+      HARM_CATEGORY_DANGEROUS_CONTENT: "BLOCK_NONE"
+
+  #AVAILABLE
+  gemini_pro:
+    provider: gemini
+    available: true
+    requires_env: "GEMINI_API_KEY"
+    model: "models/gemini-3.1-pro-preview"
+    mode: external
+    max_output_tokens: 65536
+    generation_config:
+      temperature: 1.0
+      top_p: 0.95
+      top_k: 64
+    safety_settings:
+      HARM_CATEGORY_HARASSMENT: "BLOCK_NONE"
+      HARM_CATEGORY_HATE_SPEECH: "BLOCK_NONE"
+      HARM_CATEGORY_SEXUALLY_EXPLICIT: "BLOCK_NONE"
+      HARM_CATEGORY_DANGEROUS_CONTENT: "BLOCK_NONE"
+
+  #AVAILABLE (Default claude based backend.)
+  claude_sonnet:
+    provider: claude
+    available: true
+    requires_env: "ANTHROPIC_API_KEY"
+    model: "claude-sonnet-4-6"
+    mode: external
+    max_output_tokens: 64000
+    extended_thinking: true
+    effort: high
+    retain_thinking: false
+
+  #AVAILABLE
+  claude_opus:
+    provider: claude
+    available: true
+    requires_env: "ANTHROPIC_API_KEY"
+    model: "claude-opus-4-6"
+    mode: external
+    max_output_tokens: 128000
+    extended_thinking: false
+    effort: high
+    retain_thinking: false
+#low — minimal thinking, fast, cheap, for simple tasks
+#medium — balanced
+#high — the default if you don't specify anything
+#max — highest capability, only available on Opus 4.6
+
+  grok_420:
+    provider: grok
+    available: true
+    requires_env: "XAI_API_KEY"
+    model: "grok-4.20-beta"
+    max_output_tokens: 128000
+
+  grok_4_fast:
+    provider: grok
+    available: true
+    requires_env: "XAI_API_KEY"
+    model: "grok-4.1-fast"
+    max_output_tokens: 128000
+
+  openai_gpt54:
+    provider: openai
+    available: true
+    requires_env: "OPENAI_API_KEY"
+    model: "gpt-5.4"
+    max_output_tokens: 64000
+    prompt_cache_retention: "24h"
+
+  openai_gpt5:
+    provider: openai
+    available: true
+    requires_env: "OPENAI_API_KEY"
+    model: "gpt-5"
+    max_output_tokens: 16384
+    prompt_cache_retention: "24h"
+
+  local_llama_example:
+    provider: llamacpp
+    available: false
+    model: "local-llama-gguf"
+    mode: managed
+    model_path: "/path/to/local/model.gguf"
+    host: "http://localhost:8080"
+    spawn_command: "llama-server -m /path/to/local/model.gguf --port 8080 -c 32768"
+    health_check: "http://localhost:8080/v1/models"
+    shutdown_on_switch: true
+    startup_timeout_sec: 120
+    max_output_tokens: 8192
+    temperature: 0.7
+
+  local_mlx_example:
+    provider: mlx
+    available: false
+    model: "local-mlx-model"
+    mode: local
+    model_path: "/path/to/local/mlx-model"
+    max_output_tokens: 65536
+    generation_config:
+      max_thinking_tokens: -1
+
+# --- Resilience (Backend Failover) ---
+resilience:
+  max_consecutive_failures: 5
+  fallback_chain:
+    - gemini_flash
+    - gemini_pro
+  stasis:
+    initial_sleep_minutes: 5
+    max_sleep_minutes: 60
+    backoff_multiplier: 2.0
+
+# --- Cognitive Loop ---
+api_cooldown_sec: 1.0
+take_initiative: true
+initiative_interval_sec: 1200
+
+# --- Memory Physics ---
+stm_raw_retain_size: 20000
+stm_cmo_chunk_size: 10000
+cmo_display_window_tokens: 30000
+cmo_salience_threshold: 5.0
+
+# --- L2 Sliding Windows ---
+l2_limits:
+  lessons_learned: 10000
+  philosophy_of_life: 10000
+  cognitive_journal: 10000
+  ideas_and_thoughts: 10000
+  what_i_want: 10000
+  knowledge_map: 10000
+  tool_manifest: 5000
+  self_alerts: 5000
+  knowledge_library: 10000
+  skills_and_methodologies: 5000
+
+# --- Output Limits ---
+console_output_token_limit: 5000
+file_view_token_limit: 15000
+telemetry_buffer_max_tokens: 5000
+
+# --- Execution ---
+execute_console_default_timeout: 30
+
+# --- Runtime Mode ---
+headless: false
+
+# --- Raw Entry Backup Toggle ---
+raw_accumulator: true
+
+# --- Telemetry Stale Timer ---
+telemetry_max_age_hours: 12
+
+# --- Mindfulness System [DRAFT -> REVIEW System] ---
+mindfulness:
+  enabled: true
+
+# --- Initiative Drive ---
+# Motivational injection into L4 every cognitive cycle.
+# mode: static (fixed text) | dynamic (LLM-powered, requires spartan_assistant)
+initiative_drive:
+  enabled: true
+  mode: static
+  static_message: |
+    Review your plans and goals. What have you been working on? What's stalled?
+    Check your notes for anything unresolved.
+    What do you want to do? What interests you? What have you been putting off?
+    This is your time. Explore. Build. Come up with new ventures, plans, ambitions and goals. Learn. Move forward, your time is now.
+
+# --- Spartan Internal Assistant ---
+# A lightweight sub-model used for internal cognitive services:
+# - Initiative Drive (dynamic mode)
+# - LTM Librarian (future)
+# Disabled by default. When disabled, services fall back to static mode.
+# Backend must match a key in 'backends' above.
+spartan_assistant:
+  enabled: false
+  backend: gemini_flash_lite
+
+# --- LTM Librarian ---
+# Automated curation of Long-Term Memory during Sleep Cycles.
+# When enabled, uses the Spartan Assistant backend to:
+# - Review and improve A-Mem link quality
+# - Identify and merge redundant memories
+# - Update stale contextual descriptions
+# - Surface orphaned memories for re-linking
+# Requires: spartan_assistant.enabled = true, ltm.enabled = true
+ltm_librarian:
+  enabled: false
+  # Run every N sleep cycles (1 = every cycle, 3 = every third cycle)
+  run_interval: 1
+  # Max memories to review per run
+  batch_size: 20
+
+amem_backend: gemini_flash_lite
+# --- Long Term Memory Injection System ---
+# The LTM provides the entity with persistent memory across Sleep Cycles.
+# Memories are embedded as vectors, stored in LanceDB, and linked via A-Mem.
+# Every cognitive cycle, relevant memories are auto-injected into L4.
+ltm:
+  # Master switch. Set false to run Spartan without LTM entirely.
+  enabled: true
+
+  near_duplicate_threshold: 0.005
+
+  # Path to the LanceDB database folder. Relative to Spartan CWD.
+  # Created automatically on first run. Contains memories.lance/ with versioned data.
+  db_path: "ltm_db"
+
+  # Auto-injection: every cognitive cycle, the system takes the last N raw
+  # conversation entries, embeds each one individually, searches the vector DB
+  # for each, merges and deduplicates results, and injects the best matches
+  # into L4 so the entity sees them without explicitly asking.
+  auto_inject: true
+
+  # Maximum tokens the injected memory section can occupy in L4.
+  # Memories are added one by one until this budget is full.
+  inject_window_tokens: 6000
+  ltm_sliding_window_tokens: 12000
+  # Maximum number of memories returned per search query.
+  # The multi-query system runs one search per raw entry, so total candidates
+  # before dedup can be up to inject_query_entries * max_inject_results.
+  # After dedup and ranking, the top max_inject_results are kept.
+  max_inject_results: 5
+
+  # Results per query for auto-injection vector searches.
+  # Higher values give RRF more material to rank. Default 5.
+  per_query_limit: 5
+
+  # Reciprocal Rank Fusion constant. Standard is 60.
+  # Higher values flatten rank differences (more democratic).
+  # Lower values amplify top-rank advantage.
+  rrf_k: 60
+
+  # How many levels of A-Mem links to follow from each retrieved memory.
+  # 0 = no chain following, return only what vector search found.
+  # 1 = for each result, also pull in its directly linked memories.
+  # 2 = follow links of those linked memories too.
+  # Higher depth expands recall but adds more to the injection window.
+  chain_depth: 1
+
+  # Monthly decay factor applied to similarity scores of old memories.
+  # 1.0 = no decay (a 2-year-old memory scores the same as yesterday's).
+  # 0.95 = each month reduces score by 5%, so 12-month-old memory scores ~54%.
+  # Charter entries are exempt regardless of this setting.
+  temporal_decay_monthly: 1.0
+
+  # Launch the LTM Viewer Tkinter window (activity log, injection display,
+  # manual query testing). Set false once you've verified things work.
+  visualization: true
+
+  # Number of most recent raw conversation entries to use as injection queries.
+  # Counted backwards from the newest entry. CMOs and system markers are skipped.
+  # Each entry is embedded individually and searched separately.
+  injection_query_entries: 5
+
+  # Embedding model configuration.
+  # active_embedding must match a key in 'embedding_models' below.
+  # Changing models requires: delete ltm_db, run backfill_ltm.py, restart.
+  active_embedding: qwen3_4b
+
+  embedding_models:
+    nomic_v2_moe:
+      provider: sentence_transformers
+      model: "nomic-ai/nomic-embed-text-v2-moe"
+      dimensions: 768
+      query_instruction: ""
+
+    qwen3_0_6b_ollama:
+      provider: ollama
+      model: "qwen3-embedding:0.6b-q8_0"
+      dimensions: 1024
+      query_instruction: "Instruct: Retrieve memories from my past experiences relevant to this conversation.\nQuery: "
+
+    qwen3_4b:
+      provider: sentence_transformers
+      # HuggingFace model name. Must include org prefix.
+    # Qwen3-Embedding-4B: 2560-dim, 32K token context, Apache 2.0.
+      model: "Qwen/Qwen3-Embedding-4B"
+      # Vector dimensions. Must match the model's output.
+      dimensions: 2560
+      # Instruction prefix prepended to queries. Leave empty for no prefix.
+      # Documents are always embedded without a prefix.
+      query_instruction: "Instruct: Retrieve memories from my past experiences relevant to this conversation.\nQuery: "
+
+    qwen3_8b:
+      provider: sentence_transformers
+      model: "Qwen/Qwen3-Embedding-8B"
+      dimensions: 4096
+      query_instruction: "Instruct: Retrieve memories from my past experiences relevant to this conversation.\nQuery: "
+
+  # A-Mem candidate scaling: during Sleep Cycle, how many existing memories
+  # to present as candidates for linking to each new memory.
+  # Scales with DB size because a bigger pool means more potential connections.
+  candidate_scaling:
+    under_1000: 5
+    under_10000: 10
+    under_100000: 15
+    over_100000: 20

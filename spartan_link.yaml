@@ -1,0 +1,26 @@
+# spartan_link.yaml -- SpartanLink Configuration
+# Place this file in SpartanHQ/ alongside SpartanLink.py
+
+sender_name: Gene
+poll_interval_sec: 30
+
+agents:
+  # Each entry is a Spartan entity this collaborator monitors. SpartanLink pulls
+  # the entity's outbound messages/updates from its spartan_link/ directory and
+  # sends alerts into its alerts/ directory. Replace the examples below with your own.
+
+  # --- Local entity (same machine as this app) ---
+  Entity_Alpha:
+    type: local
+    spartan_path: /path/to/Spartans/Entity_Alpha
+
+  # --- Remote entity (another machine on your network) ---
+  # SECURITY: prefer SSH key authentication and leave 'password' out. Storing a
+  # plaintext SSH password here is discouraged; if you must, keep this file private
+  # and out of version control.
+  Entity_Beta:
+    type: remote
+    user: your_ssh_user
+    host: 192.168.x.x
+    # password: "your_ssh_password"   # optional — SSH keys strongly preferred
+    spartan_path: /path/to/Spartans/Entity_Beta
