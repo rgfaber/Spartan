@@ -9,12 +9,21 @@
 inhabiting_entity: "NewEntity"
 
 # --- Active Backend (must match a key in 'backends' below) ---
-active_backend: gemini_flash
+active_backend: groq_llama
 
 # --- Available Backends ---
 # Gemini safety_settings below are provider-side generation filter settings.
 # They do not sandbox Spartan, restrict machine access, or change local tool permissions.
 backends:
+
+  #AVAILABLE (Groq — fast OpenAI-compatible Llama inference; mesh-container default)
+  groq_llama:
+    provider: groq
+    available: true
+    requires_env: "GROQ_API_KEY"
+    model: "llama-3.3-70b-versatile"
+    mode: external
+    max_output_tokens: 8192
 
   #AVAILABLE (Fast, lightweight backend for spawned agents or low-cost cycles.)
   gemini_flash_lite:
@@ -252,6 +261,10 @@ amem_backend: gemini_flash_lite
 # Every cognitive cycle, relevant memories are auto-injected into L4.
 ltm:
   # Master switch. Set false to run Spartan without LTM entirely.
+  # Kept ON: LTM (LanceDB + embeddings) is the entity's semantic recall of
+  # experience scrolled out of context -- the memory-continuity that makes a
+  # full Spartan worth running over the lite harness. The mesh container ships
+  # lancedb + sentence-transformers for it.
   enabled: true
 
   near_duplicate_threshold: 0.005
@@ -310,7 +323,11 @@ ltm:
   # Embedding model configuration.
   # active_embedding must match a key in 'embedding_models' below.
   # Changing models requires: delete ltm_db, run backfill_ltm.py, restart.
-  active_embedding: qwen3_4b
+  # Mesh container uses the OLLAMA embedder so the heavy model runs in a
+  # separate Ollama sidecar (ollama_host defaults to localhost:11434, shared
+  # via host networking) -- the Spartan container stays lean (lancedb only, no
+  # torch / sentence-transformers). See NOTICE + the deploy script.
+  active_embedding: qwen3_0_6b_ollama
 
   embedding_models:
     nomic_v2_moe:

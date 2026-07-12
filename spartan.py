@@ -1543,6 +1543,31 @@ class GrokProvider(LLMProvider):
             }
 
 
+class GroqProvider(GrokProvider):
+    """Groq API provider (OpenAI-compatible; fast Llama/Mixtral inference).
+
+    Groq speaks the OpenAI chat-completions API, so it reuses GrokProvider's
+    generate_response verbatim -- only the endpoint + key differ (and none of
+    OpenAIProvider's OpenAI-only params like prompt_cache_retention, which Groq
+    rejects). Added by the hecate/Macula mesh integration; see NOTICE.
+    """
+
+    def __init__(self, backend_config=None):
+        if not openai_lib:
+            raise ImportError("openai package not installed. Run: pip install openai")
+        api_key = os.getenv("GROQ_API_KEY")
+        if not api_key:
+            raise ValueError("GROQ_API_KEY environment variable not set.")
+        bc = backend_config or {}
+        self.model = bc.get("model", "llama-3.3-70b-versatile")
+        self.max_output_tokens = bc.get("max_output_tokens", 8192)
+        self.client = openai_lib.OpenAI(
+            api_key=api_key,
+            base_url="https://api.groq.com/openai/v1",
+        )
+        gui_print(f"GroqProvider initialized: {self.model}", "system")
+
+
 def get_provider(backend_config=None):
     """Factory: returns the configured LLM provider."""
     bc = backend_config or {}
@@ -1559,6 +1584,8 @@ def get_provider(backend_config=None):
         return OpenAIProvider(bc)
     elif provider == "grok":
         return GrokProvider(bc)
+    elif provider == "groq":
+        return GroqProvider(bc)
     else:
         raise ValueError(f"Unsupported provider: {provider}")
 

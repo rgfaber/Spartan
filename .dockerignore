@@ -1,0 +1,10 @@
+.git/
+__pycache__/
+*.pyc
+ltm_db/
+Soul/
+alerts/
+spartan_link/
+Tools/.spartan_mesh.json
+*.dump
+.model_info.json
