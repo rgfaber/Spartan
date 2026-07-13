@@ -22,7 +22,9 @@ mkdir -p alerts Soul
 python3 -c "import sys; sys.path.insert(0,'Tools'); import SpartanRadio; SpartanRadio._load_or_register(); print('[entity] mesh identity ready')"
 
 # Inbound bridge (background): mesh inbox -> alerts/*.alert for the FileWatcher.
-python3 Tools/macula_radio.py --config Tools/.spartan_mesh.json bridge --alerts-dir alerts &
+# --config goes AFTER `bridge`: the bridge subparser also declares --config, so
+# a top-level --config is shadowed by its None default.
+python3 Tools/macula_radio.py bridge --config Tools/.spartan_mesh.json --alerts-dir alerts &
 
 # The entity: headless autonomous cognition on Groq. PID 1 -> container lifecycle.
 exec python3 spartan.py --headless
