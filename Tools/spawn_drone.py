@@ -150,6 +150,17 @@ def main():
         else:
             print(f"WARNING: {filename} not found at {src}", file=sys.stderr)
 
+    # --- Copy the mesh tools ---
+    # A drone that can only reach its commander through the local filesystem is
+    # confined to this machine. With these it is a mesh citizen: it holds its own
+    # keypair, registers itself, and is addressable BY NAME from any country in
+    # the federation. That is the difference between spawning a subprocess and
+    # spawning a colleague.
+    for tool in ["SpartanRadio.py", "macula_radio.py", "activity_reporter.py"]:
+        src = os.path.join(commander_dir, "Tools", tool)
+        if os.path.exists(src):
+            shutil.copy2(src, os.path.join(drone_dir, "Tools", tool))
+
     # Copy watchdog
     watchdog_src = os.path.join(commander_dir, "spartan_watchdog.sh")
     watchdog_dst = os.path.join(drone_dir, "spartan_watchdog.sh")
@@ -177,6 +188,38 @@ def main():
     for sf in soul_files:
         with open(os.path.join(drone_dir, "Soul", sf), 'w', encoding='utf-8') as f:
             pass
+
+    # --- Register on the Macula mesh (if the commander is on it) ---
+    # The drone mints its OWN Ed25519 identity against the commander's node, so
+    # it speaks as itself and nobody, including the commander, holds its key.
+    mesh_url = os.environ.get("SPARTAN_MESH_URL")
+    if mesh_url:
+        drone_state = os.path.join(drone_dir, "Tools", ".spartan_mesh.json")
+        env = dict(os.environ,
+                   SPARTAN_MESH_NAME=args.name,
+                   SPARTAN_MESH_URL=mesh_url,
+                   SPARTAN_MESH_STATE=drone_state)
+        try:
+            subprocess.run(
+                [sys.executable, "-c",
+                 "import sys; sys.path.insert(0, 'Tools'); "
+                 "import SpartanRadio; SpartanRadio.ensure_registered()"],
+                cwd=drone_dir, env=env, check=True, capture_output=True, timeout=60)
+            print(f"Mesh: {args.name} registered on {mesh_url}")
+
+            # Inbound: the drone's mesh inbox -> its alerts/ (its FileWatcher is
+            # the only ear it has). Without this it could speak to the federation
+            # but never hear it answer.
+            subprocess.Popen(
+                [sys.executable, "Tools/macula_radio.py", "bridge",
+                 "--config", drone_state, "--alerts-dir", "alerts"],
+                cwd=drone_dir, env=env,
+                stdout=open(os.path.join(drone_dir, "output_logs", "bridge.log"), "a"),
+                stderr=subprocess.STDOUT,
+                start_new_session=True)
+            print(f"Mesh: {args.name} bridge up (inbox -> alerts/)")
+        except Exception as e:
+            print(f"WARNING: mesh registration failed: {e}", file=sys.stderr)
 
     # --- Set up whitelists (full mesh) ---
 

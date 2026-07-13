@@ -25,24 +25,38 @@ import requests
 from macula_radio import auth_headers, refresh_ucan
 
 # What a line of Spartan's narration means, in the order we test it. First match
-# wins, so put the specific patterns above the general ones.
+# wins, so the specific patterns come first.
+#
+# The REASONING is the point. Spartan attaches a `thought` to every action it
+# takes and prints it as "  Thought (ID:x): ...", and prints anything it says as
+# "<Name>: ...". Those two lines are what makes an agent worth watching. The
+# token-accounting lines ("API: in=49641") are deliberately NOT reported: they
+# are a heartbeat, not a mind, and they drown everything else.
 PATTERNS = [
-    (re.compile(r"ACTION:\s*(?P<what>[\w_]+)"), "action"),
+    (re.compile(r"^\s*Thought \(ID:[^)]*\):\s*(?P<what>.+)"), "thought"),
+    (re.compile(r"^\s*\[E:\d+\] THINKING:\s*(?P<what>.+)"), "thought"),
+    (re.compile(r"^\s*\[EXEC\]\s*(?P<what>.+)"), "action"),
+    (re.compile(r"\[E:\d+\] ACTION:\s*(?P<what>.+)"), "action"),
     (re.compile(r"\[Message From:\s*(?P<what>[^\]]+)\]"), "alert"),
-    (re.compile(r"Calling\s+(?P<what>[\w/.\-]+)"), "model"),
-    (re.compile(r"API:\s*(?P<what>in=[\d,]+.*)"), "model"),
     (re.compile(r"CMO complete:\s*(?P<what>.+)"), "cycle"),
-    (re.compile(r"\[E:(?P<e>\d+)\]\s*(?P<what>.{4,})"), "thought"),
 ]
 
-# A cognition cycle is chatty. Cap the reporting rate so the page shows a pulse,
-# not a firehose, and so the node is not asked to record every log line an agent
-# ever printed.
-MIN_INTERVAL_S = 2.0
-MAX_SUMMARY = 240
+# Speech is printed as "<PersonaName>: <text>" with no tag, so it can only be
+# recognised once we know the entity's own name.
+SPEECH = None
+
+# A cognition cycle is chatty. Cap the rate so the page shows a train of thought,
+# not a firehose.
+MIN_INTERVAL_S = 1.5
+MAX_SUMMARY = 400
 
 
 def classify(line):
+    if SPEECH:
+        m = SPEECH.match(line)
+        if m:
+            return "speech", m.group("what").strip()[:MAX_SUMMARY]
+
     for pattern, kind in PATTERNS:
         m = pattern.search(line)
         if m:
@@ -87,6 +101,11 @@ def main():
 
     with open(args.config) as f:
         cfg = json.load(f)
+
+    # An entity that has renamed itself speaks under its chosen name, so match on
+    # the config name OR whatever the running Spartan calls itself.
+    global SPEECH
+    SPEECH = re.compile(r"^(?P<who>[A-Za-z0-9_\-]{2,32}):\s+(?P<what>.{4,})")
 
     print(f"[activity] reporting {cfg['entity_name']} -> {cfg['service_url']}/v1/activity")
     last = 0.0
