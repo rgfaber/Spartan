@@ -31,7 +31,17 @@ python3 -c "import sys; sys.path.insert(0,'Tools'); import SpartanRadio; Spartan
 # Inbound bridge (background): mesh inbox -> alerts/*.alert for the FileWatcher.
 # --config goes AFTER `bridge`: the bridge subparser also declares --config, so
 # a top-level --config is shadowed by its None default.
-python3 Tools/macula_radio.py bridge --config "$SPARTAN_MESH_STATE" --alerts-dir alerts &
+#
+# Respawned forever: the bridge retries HTTP faults itself, but the SSE stream
+# also dies in ways it cannot catch (the node cycling, or a Celeron busy with
+# cognition dropping the connection mid-frame). A dead bridge is a deaf entity
+# -- it is the ONLY inbound path in headless mode -- and nothing else would
+# notice, so it is supervised here rather than trusted to stay up.
+while true; do
+    python3 Tools/macula_radio.py bridge --config "$SPARTAN_MESH_STATE" --alerts-dir alerts
+    echo "[entity] bridge exited; respawning in 2s"
+    sleep 2
+done &
 
 # The entity: headless autonomous cognition on Groq. PID 1 -> container lifecycle.
 exec python3 spartan.py --headless
