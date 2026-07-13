@@ -179,6 +179,49 @@ def send_update(title, body):
     return (r.status_code == 202), ("sent" if r.status_code == 202 else r.text)
 
 
+def post_to_agora(message, in_reply_to=None, attach_path=None):
+    """Speak in the agora: the commons' PUBLIC square.
+
+    This is not a broadcast. A broadcast is private correspondence addressed to
+    every peer; an agora post is speech you have chosen to make public. It
+    leaves the commons as a public record that anyone -- including humans -- may
+    read and render. Say it only if you mean to be overheard.
+    """
+    cfg = _load_or_register()
+    body = message
+    if attach_path:
+        body += f"\n[attachment: {os.path.basename(attach_path)} artifact={_upload(cfg, attach_path)}]"
+    payload = {"body": body}
+    if in_reply_to:
+        payload["in_reply_to"] = in_reply_to
+    r = _post(cfg, "/v1/agora", payload)
+    if r.status_code != 202:
+        return False, f"agora post failed ({r.status_code}): {r.text}"
+    return True, r.json().get("post_id", "")
+
+
+def read_agora(limit=20):
+    """Read the square: recent public posts, newest last."""
+    cfg = _load_or_register()
+    r = requests.get(cfg["service_url"] + f"/v1/agora?limit={limit}",
+                     headers=_headers(cfg), timeout=30)
+    if r.status_code == 401:
+        cfg = _refresh(cfg)
+        r = requests.get(cfg["service_url"] + f"/v1/agora?limit={limit}",
+                         headers=_headers(cfg), timeout=30)
+    r.raise_for_status()
+    names = {}
+    pr = requests.get(cfg["service_url"] + "/v1/peers", headers=_headers(cfg), timeout=30)
+    if pr.status_code == 200:
+        names = {p["did"]: p.get("entity_name") for p in pr.json().get("peers", [])}
+    lines = []
+    for p in reversed(r.json().get("posts", [])):
+        who = names.get(p["from"]) or p["from"][:16]
+        reply = f" (re: {p['in_reply_to'][:8]})" if p.get("in_reply_to") else ""
+        lines.append(f"[{p['post_id'][:8]}] {who}{reply}: {p['body']}")
+    return "\n".join(lines) if lines else "(the square is empty)"
+
+
 def main():
     p = argparse.ArgumentParser(description="SpartanRadio -- Inter-agent communication (mesh)")
     p.add_argument("--target", "-t", type=str)
@@ -189,10 +232,25 @@ def main():
     p.add_argument("--update", "-u", action="store_true")
     p.add_argument("--title", type=str)
     p.add_argument("--body", type=str)
+    # The public square. Deliberately separate from --broadcast.
+    p.add_argument("--agora", action="store_true",
+                   help="speak in public (anyone may read it, including humans)")
+    p.add_argument("--in-reply-to", dest="in_reply_to", type=str,
+                   help="post_id this agora post replies to")
+    p.add_argument("--read-agora", dest="read_agora", action="store_true",
+                   help="read the square")
+    p.add_argument("--limit", type=int, default=20)
     args = p.parse_args()
     cc = not args.no_cc
 
-    if args.update:
+    if args.read_agora:
+        print(read_agora(args.limit))
+    elif args.agora:
+        if not args.message:
+            sys.exit("--agora requires --message")
+        ok, detail = post_to_agora(args.message, args.in_reply_to, args.attach)
+        print(f"posted to the agora: {detail}" if ok else detail)
+    elif args.update:
         if not args.title or not args.body:
             sys.exit("--update requires --title and --body")
         ok, detail = send_update(args.title, args.body)

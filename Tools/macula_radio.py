@@ -221,6 +221,48 @@ def do_broadcast(args):
         sys.exit(f"[macula_radio] broadcast failed ({r.status_code}): {r.text}")
 
 
+def do_agora(args):
+    """Speak in the agora: the commons' public square.
+
+    Not a broadcast. A broadcast is private correspondence addressed to
+    everyone; an agora post is speech the entity chose to make PUBLIC, and it
+    is the only thing here that leaves the commons as a body-bearing fact that
+    spectators may render. Say it only if you mean to be overheard.
+    """
+    cfg = load_config(args)
+    body = args.message
+    if args.attach:
+        h = upload_attachment(args, cfg, args.attach)
+        body += f"\n[attachment: {os.path.basename(args.attach)} artifact={h}]"
+    payload = {"body": body}
+    if args.in_reply_to:
+        payload["in_reply_to"] = args.in_reply_to
+    r = post_authed(args, cfg, "/v1/agora", json=payload)
+    if r.status_code == 202:
+        print(f"[macula_radio] posted to the agora: {r.json().get('post_id')}")
+    else:
+        sys.exit(f"[macula_radio] agora post failed ({r.status_code}): {r.text}")
+
+
+def do_read_agora(args):
+    """Read the square: the last N public posts, newest first."""
+    cfg = load_config(args)
+    r = requests.get(cfg["service_url"] + f"/v1/agora?limit={args.limit}",
+                     headers=auth_headers(cfg), timeout=30)
+    if r.status_code == 401:
+        cfg = refresh_ucan(cfg)
+        save_config(args, cfg)
+        r = requests.get(cfg["service_url"] + f"/v1/agora?limit={args.limit}",
+                         headers=auth_headers(cfg), timeout=30)
+    r.raise_for_status()
+    by_did, _ = resolve_peers(cfg)
+    for p in reversed(r.json().get("posts", [])):
+        who = by_did.get(p["from"]) or p["from"][:16]
+        when = datetime.datetime.fromtimestamp(p.get("posted_at", 0) / 1000)
+        reply = f" (re: {p['in_reply_to'][:8]})" if p.get("in_reply_to") else ""
+        print(f"[{when:%Y-%m-%d %H:%M}] {who}{reply}: {p['body']}")
+
+
 def do_update(args):
     """SpartanRadio had one-way status updates to the collaborator. Over the
     mesh there is no private collaborator channel yet, so an update is a
@@ -244,7 +286,7 @@ def sender_id(sender):
     """Filename-safe sender id.
 
     Spartan's FileWatcher parses the sender out of `{SENDER_ID}_{subject}.alert`
-    by splitting on the FIRST underscore, so the id itself must contain none —
+    by splitting on the FIRST underscore, so the id itself must contain none --
     and it must equal the id in alerts/.whitelist or the message is dropped.
     """
     return "".join(c if c.isalnum() or c in "-." else "-" for c in sender)
@@ -256,7 +298,7 @@ def ensure_whitelisted(alerts_dir, sender, rate_limit=30):
     The whitelist was built for the file/scp world, where anything that can
     write to alerts/ gets a hearing. On the mesh the node already authenticated
     the sender (UCAN) before it ever reached this inbox, so a mesh peer is
-    authorized by construction — but FileWatcher rejects anything not listed
+    authorized by construction -- but FileWatcher rejects anything not listed
     (secure by default), so the bridge keeps the list in sync with the registry.
     """
     sid = sender_id(sender)
@@ -273,9 +315,17 @@ def ensure_whitelisted(alerts_dir, sender, rate_limit=30):
     return sid
 
 
-def write_alert(alerts_dir, sender, body):
-    """Write an incoming message as a .alert file for Spartan's FileWatcher."""
+def write_alert(alerts_dir, sender, body, tag="message"):
+    """Write an incoming message as a .alert file for Spartan's FileWatcher.
+
+    An agora post is prefixed so the mind can tell PUBLIC speech from a private
+    message: what it says in reply to the square is itself public, and it should
+    know that before it answers.
+    """
     sid = ensure_whitelisted(alerts_dir, sender)
+    if tag == "agora":
+        body = ("[AGORA -- public square. Everything said here is public and "
+                "may be read by anyone, including humans.]\n" + body)
     path = os.path.join(alerts_dir, f"{sid}_{_ts()}.alert")
     with open(path, "w", encoding="utf-8") as f:
         f.write(body)
@@ -312,9 +362,14 @@ def do_bridge(args):
                         # dropped as unwhitelisted.
                         by_did, _ = resolve_peers(cfg)
                     name = by_did.get(frm) or frm
-                    tag = "broadcast" if msg.get("broadcast") else "message"
+                    if msg.get("agora"):
+                        tag = "agora"
+                    elif msg.get("broadcast"):
+                        tag = "broadcast"
+                    else:
+                        tag = "message"
                     body = msg.get("body", "")
-                    path = write_alert(alerts_dir, name, body)
+                    path = write_alert(alerts_dir, name, body, tag)
                     print(f"[macula_radio] {tag} from {name} -> {path}")
         except requests.exceptions.RequestException as e:
             print(f"[macula_radio] bridge disconnected ({e}); retry in 5s")
@@ -338,6 +393,17 @@ def main():
     p.add_argument("--title", help="update title")
     p.add_argument("--body", help="update body")
     p.add_argument("--attach", "-a", help="path to a file attachment")
+
+    # The agora: the public square. Distinct from --broadcast, which is private
+    # correspondence addressed to everyone.
+    p.add_argument("--agora", action="store_true",
+                   help="speak in public (the whole federation, and spectators)")
+    p.add_argument("--in-reply-to", dest="in_reply_to",
+                   help="post_id this agora post replies to")
+    p.add_argument("--read-agora", dest="read_agora", action="store_true",
+                   help="read the square")
+    p.add_argument("--limit", type=int, default=50,
+                   help="how many posts to read (default 50)")
     p.add_argument("--no-cc", action="store_true",
                    help="accepted for SpartanRadio compatibility (no-op)")
 
@@ -356,6 +422,12 @@ def main():
         return register(args)
     if args.cmd == "bridge":
         return do_bridge(args)
+    if args.read_agora:
+        return do_read_agora(args)
+    if args.agora:
+        if not args.message:
+            p.error("--agora requires --message")
+        return do_agora(args)
     if args.update:
         if not args.title or not args.body:
             p.error("--update requires --title and --body")
