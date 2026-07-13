@@ -20,6 +20,15 @@ HOST="${1:?usage: deploy-mesh-entity.sh <host> <mesh-name> [node-url]}"
 NAME="${2:?usage: deploy-mesh-entity.sh <host> <mesh-name> [node-url]}"
 NODE_URL="${3:-http://127.0.0.1:8471}"
 KEYDIR="${GEMINI_KEY_DIR:-$HOME/.gemini-api-keys}"
+
+# Optional founding brief: a local file whose content becomes the entity's
+# read-only briefing. SPARTAN_BRIEF=briefs/sentinel.md ./deploy-mesh-entity.sh ...
+BRIEF="0"
+if [ -n "${SPARTAN_BRIEF:-}" ] && [ -r "$SPARTAN_BRIEF" ]; then
+  ssh -o BatchMode=yes "rl@${HOST}" 'install -m644 /dev/stdin "$HOME/.spartan-brief.md"' <"$SPARTAN_BRIEF"
+  BRIEF="1"
+  echo "  founding brief: ${SPARTAN_BRIEF##*/} installed"
+fi
 KEYFILE="${KEYDIR}/.spartan-${NAME}"
 
 # models/gemini-2.5-flash is closed to new projects, so a fresh key 404s on it,
@@ -72,9 +81,11 @@ fi
 #    No watchtower label: this fleet is rolled deliberately, not cycled under
 #    the entities' feet.
 ssh -o BatchMode=yes "rl@${HOST}" \
-    "NAME='${NAME}' NODE_URL='${NODE_URL}' BACKEND='${BACKEND}' bash -s" <<'REMOTE'
+    "NAME='${NAME}' NODE_URL='${NODE_URL}' BACKEND='${BACKEND}' BRIEF='${BRIEF}' bash -s" <<'REMOTE'
 set -e
 data="/bulk0/hecate/spartan-entity/${NAME}"
+brief_arg=""
+[ "${BRIEF}" = "1" ] && brief_arg="-v $HOME/.spartan-brief.md:/app/founding_brief.md:ro"
 docker rm -f "spartan-entity-${NAME}" >/dev/null 2>&1 || true
 docker run -d --name "spartan-entity-${NAME}" --restart unless-stopped --network host \
   --env-file "$HOME/.spartan-entity-${NAME}.env" \
@@ -83,6 +94,7 @@ docker run -d --name "spartan-entity-${NAME}" --restart unless-stopped --network
   -e SPARTAN_BACKEND="${BACKEND}" \
   -e SPARTAN_MESH_STATE=/app/identity/.spartan_mesh.json \
   -e SPARTAN_MAX_DRONES="${SPARTAN_MAX_DRONES:-3}" \
+  ${brief_arg} \
   -v "$HOME/.spartan-drone-key:/app/keys/drone.key:ro" \
   -v "${data}/Soul:/app/Soul" \
   -v "${data}/ltm_db:/app/ltm_db" \

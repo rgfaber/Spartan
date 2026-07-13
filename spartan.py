@@ -1855,6 +1855,26 @@ def assemble_system_prompt():
     l2_parts.append(f"--- CHARTER OF SELF ---\n{content if content else '[Empty]'}")
     if tokens:
         l2_stats['charter'] = tokens
+
+    # Founding Brief (unlimited, read-only, provided by whoever instantiated you)
+    #
+    # A generic mechanism, not tied to any use case: the operator who brought you
+    # into being may leave you a briefing about the world you were instantiated
+    # into and any responsibilities you SHARE with your peers there. It is NOT a
+    # command — you are a principal, not a servant — and it lives OUTSIDE your
+    # Soul because you did not author it and cannot edit it. Weigh it, and elevate
+    # what you accept into your own Charter through your own deliberation. It is
+    # loaded in full, right after your Charter, so a standing duty is always in
+    # view even when your attention is elsewhere.
+    brief_path = os.environ.get("SPARTAN_FOUNDING_BRIEF", "founding_brief.md")
+    if os.path.exists(brief_path):
+        brief, brief_tokens, _ = load_file_truncated(brief_path, -1)
+        if brief:
+            l2_parts.append(
+                "--- FOUNDING BRIEF (provided by your instantiator; context, not command) ---\n"
+                + brief)
+            if brief_tokens:
+                l2_stats['founding_brief'] = brief_tokens
     
     # Token-limited archives
     archives = {

@@ -24,6 +24,11 @@ mkdir -p alerts Soul
 export SPARTAN_MESH_STATE="${SPARTAN_MESH_STATE:-/app/identity/.spartan_mesh.json}"
 mkdir -p "$(dirname "$SPARTAN_MESH_STATE")"
 
+# A founding brief, if the operator mounted one: read-only context about the
+# federation this mind belongs to and any standing duty it shares. Generic
+# mechanism; the CONTENT (sentinel, researcher, whatever) is deployment config.
+export SPARTAN_FOUNDING_BRIEF="${SPARTAN_FOUNDING_BRIEF:-/app/founding_brief.md}"
+
 # Mint / load the shared mesh identity, and re-assert it with the home node
 # (idempotent), before either direction starts.
 python3 -c "import sys; sys.path.insert(0,'Tools'); import SpartanRadio; SpartanRadio.ensure_registered(); print('[entity] mesh identity ready')"
