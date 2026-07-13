@@ -48,12 +48,47 @@ backends:
       HARM_CATEGORY_DANGEROUS_CONTENT: "BLOCK_NONE"
 
   #AVAILABLE (Default Gemini based backend, good, fast, backend LLM.)
+  #AVAILABLE (mesh-container DEFAULT -- the one a fresh key can actually call)
+  gemini_flash_3:
+    provider: gemini
+    available: true
+    requires_env: "GEMINI_API_KEY"
+    # 1M context, 65k out. Use THIS, not gemini_flash below.
+    #
+    # Google has closed models/gemini-2.5-flash to new projects ("no longer
+    # available to new users"), so a key minted today 404s on it while an older
+    # key still works. Two traps follow:
+    #   1. ListModels still advertises 2.5-flash to those new keys.
+    #   2. The ALIASES (gemini-flash-latest, gemini-2.5-flash-lite) resolve
+    #      server-side to 2.5-flash and 404 too, even though a raw REST probe on
+    #      the alias returns 200. Name an explicit model, never an alias.
+    # Verified per key with hecate-spartan's scripts/test-gemini-keys.sh.
+    model: "models/gemini-3-flash-preview"
+    # Explicit server-side context caching is capped at ZERO tokens on the new
+    # free tier (TotalCachedContentStorageTokensPerModelFreeTier limit=0), so
+    # every cache creation 429s and falls back to an uncached call anyway. Skip
+    # the attempt: it costs a round trip and fills the log with a stack trace
+    # each cycle. Turn it back on for a project with a paid tier -- a Spartan
+    # cycle is ~50k tokens of Genesis Core, and caching it is a big win.
+    caching: false
+    mode: external
+    max_output_tokens: 65536
+    generation_config:
+      temperature: 1.0
+      top_p: 0.95
+      top_k: 64
+    safety_settings:
+      HARM_CATEGORY_HARASSMENT: "BLOCK_NONE"
+      HARM_CATEGORY_HATE_SPEECH: "BLOCK_NONE"
+      HARM_CATEGORY_SEXUALLY_EXPLICIT: "BLOCK_NONE"
+      HARM_CATEGORY_DANGEROUS_CONTENT: "BLOCK_NONE"
+
+  #AVAILABLE ONLY on projects that already had access (see gemini_flash_latest)
   gemini_flash:
     provider: gemini
     available: true
     requires_env: "GEMINI_API_KEY"
-    # gemini-3.5-flash is not offered on the standard API; 2.5-flash is (1M
-    # context, generous free tier) -- verified against the key.
+    # Kept for keys whose project predates the cutoff; a new project gets 404.
     model: "models/gemini-2.5-flash"
     mode: external
     max_output_tokens: 65536

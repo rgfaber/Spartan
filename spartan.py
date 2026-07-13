@@ -183,8 +183,17 @@ def load_config():
     PERSONA_NAME = cfg.get("inhabiting_entity", "")
 
     # --- Active Backend ---
-    active_key = _require(cfg, "active_backend")
+    # SPARTAN_BACKEND lets the operator pick the backend per CONTAINER, so one
+    # image can carry minds on different models (and the LTM scribe on its own).
+    # It is a default, not a leash: an entity that switches backend at runtime
+    # rewrites active_backend in its config as before. Note the config lives in
+    # the image layer, so a self-chosen backend does not survive a redeploy
+    # until spartan_config.yaml is mounted on the entity's volume.
+    active_key = os.environ.get("SPARTAN_BACKEND") or _require(cfg, "active_backend")
     backends = _require(cfg, "backends")
+    # Keep the in-memory config honest about what is actually running, so the
+    # HUD and the backend-switch tool report the override rather than the yaml.
+    cfg["active_backend"] = active_key
     if active_key not in backends:
         raise ValueError(f"FATAL: active_backend '{active_key}' not found in backends section of {CONFIG_FILE}")
     backend = backends[active_key]
@@ -854,11 +863,16 @@ class GeminiProvider(LLMProvider):
             generation_config=self._gen_config,
             safety_settings=self._safety_api
         )
+        # Backends may disable explicit context caching. The new free tier caps
+        # cached-content storage at zero tokens, so every create attempt 429s and
+        # falls back uncached: a wasted round trip and a stack trace per cycle.
+        self._caching_enabled = bc.get("caching", True)
         self.cached_content_obj = None
         self.cached_model = None
         self.cached_message_count = 0
         self._cached_system_hash = None
-        gui_print(f"GeminiProvider initialized: {self.model}", "system")
+        gui_print(f"GeminiProvider initialized: {self.model}"
+                  f"{'' if self._caching_enabled else ' (context caching off)'}", "system")
 
     def _prepare_gemini_history(self, messages):
         """Convert messages to Gemini chat history format."""
@@ -888,6 +902,8 @@ class GeminiProvider(LLMProvider):
         """Creates a real server-side explicit cache via the Gemini Caching API.
         Deletes any existing cache first, then creates a new one.
         Falls back silently on failure (e.g. free tier)."""
+        if not self._caching_enabled:
+            return False
         if not base_messages or not genai_caching:
             gui_print("GeminiProvider: Caching unavailable or no base messages.", "system")
             return False
