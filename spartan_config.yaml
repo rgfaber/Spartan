@@ -9,7 +9,11 @@
 inhabiting_entity: "NewEntity"
 
 # --- Active Backend (must match a key in 'backends' below) ---
-active_backend: groq_llama
+# Gemini for full entities: Spartan's ~55k-token cognitive cycle (Genesis Core
+# ~50k) exceeds Groq's free-tier 12k TPM. Gemini 2.5 Flash has 1M context + a
+# generous free tier. groq_llama stays defined for the lite harness (small
+# prompts) and for Groq Dev-tier use.
+active_backend: gemini_flash
 
 # --- Available Backends ---
 # Gemini safety_settings below are provider-side generation filter settings.
@@ -48,7 +52,9 @@ backends:
     provider: gemini
     available: true
     requires_env: "GEMINI_API_KEY"
-    model: "models/gemini-3.5-flash"
+    # gemini-3.5-flash is not offered on the standard API; 2.5-flash is (1M
+    # context, generous free tier) -- verified against the key.
+    model: "models/gemini-2.5-flash"
     mode: external
     max_output_tokens: 65536
     generation_config:
@@ -261,11 +267,13 @@ amem_backend: gemini_flash_lite
 # Every cognitive cycle, relevant memories are auto-injected into L4.
 ltm:
   # Master switch. Set false to run Spartan without LTM entirely.
-  # Kept ON: LTM (LanceDB + embeddings) is the entity's semantic recall of
-  # experience scrolled out of context -- the memory-continuity that makes a
-  # full Spartan worth running over the lite harness. The mesh container ships
-  # lancedb + sentence-transformers for it.
-  enabled: true
+  # OFF on the beam cluster: the Celerons (no AVX) can't run LanceDB's AVX2
+  # core (uncatchable SIGILL), so the container omits lancedb and LTM is off.
+  # The entity keeps Soul (Layer 2) + Episodic/CMO (Layer 3) memory -- full
+  # identity + near-term continuity; only deep vector recall of long-scrolled
+  # experience is absent, which barely matters until an entity is long-lived.
+  # Re-enable on AVX2 hosts (add lancedb to the image) for persistent entities.
+  enabled: false
 
   near_duplicate_threshold: 0.005
 

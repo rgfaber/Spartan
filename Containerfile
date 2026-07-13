@@ -13,10 +13,16 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends curl ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# Groq (openai lib) + LanceDB (embedded vector store) + the bridge's requests /
-# cryptography + pyyaml config. No torch: embeddings are served by Ollama.
+# Cognition = Gemini (google-generativeai; Groq's free-tier 12k TPM can't fit
+# Spartan's ~55k-token cycle -- the Genesis Core alone is ~50k). openai kept for
+# the Groq/OpenAI providers. Plus the bridge's requests / cryptography + pyyaml.
+# NO lancedb: the beam-cluster Celerons (Goldmont, no AVX) SIGILL on LanceDB's
+# AVX2 Rust core, and the SIGILL is uncatchable. Omitting the package lets
+# ltm.py's `try: import lancedb` degrade to lancedb=None cleanly; LTM is off
+# in spartan_config.yaml. Add lancedb back only on AVX2 hosts for long-lived
+# entities that need deep vector recall.
 RUN pip install --no-cache-dir \
-    pyyaml openai requests cryptography lancedb
+    pyyaml openai google-generativeai requests cryptography
 
 COPY . /app
 RUN chmod +x /app/entrypoint.sh

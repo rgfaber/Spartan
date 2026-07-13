@@ -14,7 +14,7 @@ set -e
 cd /app
 mkdir -p alerts Soul
 
-: "${GROQ_API_KEY:?GROQ_API_KEY must be set}"
+: "${GEMINI_API_KEY:?GEMINI_API_KEY must be set (active backend = gemini_flash)}"
 : "${SPARTAN_MESH_URL:?SPARTAN_MESH_URL must be set (home node ingress)}"
 : "${SPARTAN_MESH_NAME:?SPARTAN_MESH_NAME must be set (entity mesh name)}"
 
