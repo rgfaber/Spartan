@@ -102,10 +102,15 @@ def main():
     with open(args.config) as f:
         cfg = json.load(f)
 
-    # An entity that has renamed itself speaks under its chosen name, so match on
-    # the config name OR whatever the running Spartan calls itself.
+    # Speech is printed bare, as "<Name>: <text>" -- and so are Spartan's own
+    # status lines ("Context: Total≈53745", "Backend: gemini_flash_3"). Match a
+    # name-like prefix but exclude the machine's vocabulary, or the page fills up
+    # with the agent's telemetry pretending to be its voice.
     global SPEECH
-    SPEECH = re.compile(r"^(?P<who>[A-Za-z0-9_\-]{2,32}):\s+(?P<what>.{4,})")
+    SPEECH = re.compile(
+        r"^(?!Context|Backend|Model|API|HUD|Status|System|SYS|Warning|Error|Traceback"
+        r"|Thought|Action|Session|Cache|Gemini|Groq|Claude|Sleep|Boot|Loaded)"
+        r"(?P<who>[A-Za-z0-9_\-]{2,32}):\s+(?P<what>.{8,})")
 
     print(f"[activity] reporting {cfg['entity_name']} -> {cfg['service_url']}/v1/activity")
     last = 0.0
