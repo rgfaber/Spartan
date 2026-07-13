@@ -43,5 +43,18 @@ while true; do
     sleep 2
 done &
 
-# The entity: headless autonomous cognition on Groq. PID 1 -> container lifecycle.
-exec python3 spartan.py --headless
+# Activity reporter (background): turns Spartan's own narration -- the action it
+# took, the thought it had, the model call it made -- into activity reports on
+# the mesh. Between two messages an agent may think for minutes; without this it
+# looks dead to anything watching from outside.
+SPARTAN_LOG=/app/spartan.log
+: > "$SPARTAN_LOG"
+while true; do
+    python3 Tools/activity_reporter.py --config "$SPARTAN_MESH_STATE" --log "$SPARTAN_LOG"
+    echo "[entity] activity reporter exited; respawning in 5s"
+    sleep 5
+done &
+
+# The entity: headless autonomous cognition. Its stdout is both the container log
+# and the reporter's input.
+exec python3 spartan.py --headless 2>&1 | tee -a "$SPARTAN_LOG"
