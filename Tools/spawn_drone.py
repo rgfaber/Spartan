@@ -136,6 +136,20 @@ def main():
         print(f"Use terminate_drone.py --name {args.name} first, or choose a different name.", file=sys.stderr)
         sys.exit(1)
 
+    # --- Guardrails: money is real now ---
+    # Drones run on a PAID key. A general in a loop could spawn dozens, and every
+    # one of them is a full ~50k-token cycle on someone's card. Cap the fleet and
+    # fail loudly, rather than quietly discovering it on a bill.
+    max_drones = int(os.environ.get("SPARTAN_MAX_DRONES", "3"))
+    live = ([d for d in os.listdir(drones_dir)
+             if os.path.isdir(os.path.join(drones_dir, d))]
+            if os.path.isdir(drones_dir) else [])
+    if len(live) >= max_drones:
+        print(f"REFUSED: {len(live)} drone(s) already exist and the cap is {max_drones} "
+              f"(SPARTAN_MAX_DRONES). Terminate one with Tools/terminate_drone.py first.",
+              file=sys.stderr)
+        sys.exit(1)
+
     # --- Create directory structure ---
     os.makedirs(drone_dir)
     for subdir in ["Soul", "Tools", "alerts", "telemetry", "crash_reports", "output_logs"]:
@@ -192,6 +206,17 @@ def main():
     # --- Register on the Macula mesh (if the commander is on it) ---
     # The drone mints its OWN Ed25519 identity against the commander's node, so
     # it speaks as itself and nobody, including the commander, holds its key.
+    # A drone does NOT share its commander's quota. The general is on a free-tier
+    # key that carries exactly one agent; a drone on the same key would 429 the
+    # mind that spawned it mid-thought. Drones run on the paid drone key, which
+    # also unlocks explicit context caching (the free tier caps it at zero), so
+    # the 50k-token Genesis Core is cached once instead of re-sent every cycle.
+    drone_key_file = os.environ.get("SPARTAN_DRONE_KEY_FILE", "/app/keys/drone.key")
+    drone_key = None
+    if os.path.exists(drone_key_file):
+        with open(drone_key_file) as f:
+            drone_key = f.read().strip()
+
     mesh_url = os.environ.get("SPARTAN_MESH_URL")
     if mesh_url:
         drone_state = os.path.join(drone_dir, "Tools", ".spartan_mesh.json")
@@ -277,6 +302,19 @@ def main():
 
     env = os.environ.copy()
     env["SPARTAN_ARGS"] = spartan_args
+    # The drone is a mesh citizen with its own identity, its own backend, and its
+    # own quota. It reports its activity as itself, too.
+    env["SPARTAN_MESH_NAME"] = args.name
+    env["SPARTAN_MESH_STATE"] = os.path.join(drone_dir, "Tools", ".spartan_mesh.json")
+
+    if drone_key:
+        env["GEMINI_API_KEY"] = drone_key
+        env["SPARTAN_BACKEND"] = os.environ.get("SPARTAN_DRONE_BACKEND", "gemini_drone")
+        print(f"Quota:  drone key (paid, cached) — the commander's key is untouched")
+    else:
+        print("WARNING: no drone key at "
+              f"{drone_key_file}; this drone will share its commander's quota "
+              "and they will throttle each other", file=sys.stderr)
 
     proc = subprocess.Popen(
         watchdog_cmd,

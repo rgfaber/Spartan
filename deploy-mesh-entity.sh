@@ -51,6 +51,19 @@ printf 'GEMINI_API_KEY=%s\n' "$KEY" \
       "install -m600 /dev/stdin \"\$HOME/.spartan-entity-${NAME}.env\""
 unset KEY
 
+# 1b. The DRONE key: paid tier, shared by every drone any general spawns, never
+#     by the generals themselves. A drone on its commander's free-tier key would
+#     429 the mind that spawned it mid-thought. Same stdin discipline.
+DRONE_KEYFILE="${KEYDIR}/.spartan-drone"
+if [ -r "$DRONE_KEYFILE" ]; then
+  tr -d '\r\n' <"$DRONE_KEYFILE" \
+    | ssh -o BatchMode=yes "rl@${HOST}" 'install -m600 /dev/stdin "$HOME/.spartan-drone-key"'
+  echo "  drone quota: paid key installed (generals spawn without throttling themselves)"
+else
+  echo "  no drone key (${DRONE_KEYFILE##*/}): drones would share their commander's quota" >&2
+  ssh -o BatchMode=yes "rl@${HOST}" 'touch "$HOME/.spartan-drone-key"; chmod 600 "$HOME/.spartan-drone-key"'
+fi
+
 # 2. Run the entity (host net -> reaches local node :8471 + ollama :11434).
 #    Soul/ + ltm_db/ + alerts/ persist on /bulk0 so the mind survives restarts,
 #    and identity/ carries the Ed25519 key + UCAN so it survives as the SAME
@@ -69,6 +82,8 @@ docker run -d --name "spartan-entity-${NAME}" --restart unless-stopped --network
   -e SPARTAN_MESH_NAME="${NAME}" \
   -e SPARTAN_BACKEND="${BACKEND}" \
   -e SPARTAN_MESH_STATE=/app/identity/.spartan_mesh.json \
+  -e SPARTAN_MAX_DRONES="${SPARTAN_MAX_DRONES:-3}" \
+  -v "$HOME/.spartan-drone-key:/app/keys/drone.key:ro" \
   -v "${data}/Soul:/app/Soul" \
   -v "${data}/ltm_db:/app/ltm_db" \
   -v "${data}/alerts:/app/alerts" \

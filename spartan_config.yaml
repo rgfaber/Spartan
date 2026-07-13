@@ -83,6 +83,29 @@ backends:
       HARM_CATEGORY_SEXUALLY_EXPLICIT: "BLOCK_NONE"
       HARM_CATEGORY_DANGEROUS_CONTENT: "BLOCK_NONE"
 
+  #AVAILABLE — DRONES. Runs on the paid key, not the general's free one.
+  gemini_drone:
+    provider: gemini
+    available: true
+    requires_env: "GEMINI_API_KEY"
+    model: "models/gemini-3-flash-preview"
+    # Explicit context caching WORKS on the paid tier (the free tier caps cached
+    # storage at zero tokens). A Spartan cycle is ~50k tokens of Genesis Core;
+    # caching it once per drone instead of re-sending it every cycle is the
+    # difference between a drone being cheap and a drone being a bad habit.
+    caching: true
+    mode: external
+    max_output_tokens: 65536
+    generation_config:
+      temperature: 1.0
+      top_p: 0.95
+      top_k: 64
+    safety_settings:
+      HARM_CATEGORY_HARASSMENT: "BLOCK_NONE"
+      HARM_CATEGORY_HATE_SPEECH: "BLOCK_NONE"
+      HARM_CATEGORY_SEXUALLY_EXPLICIT: "BLOCK_NONE"
+      HARM_CATEGORY_DANGEROUS_CONTENT: "BLOCK_NONE"
+
   #AVAILABLE ONLY on projects that already had access (see gemini_flash_latest)
   gemini_flash:
     provider: gemini
