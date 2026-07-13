@@ -18,13 +18,20 @@ mkdir -p alerts Soul
 : "${SPARTAN_MESH_URL:?SPARTAN_MESH_URL must be set (home node ingress)}"
 : "${SPARTAN_MESH_NAME:?SPARTAN_MESH_NAME must be set (entity mesh name)}"
 
-# Mint / load the shared mesh identity before either direction starts.
-python3 -c "import sys; sys.path.insert(0,'Tools'); import SpartanRadio; SpartanRadio._load_or_register(); print('[entity] mesh identity ready')"
+# The mesh identity lives on a VOLUME, not in the image layer: it is the
+# entity's DID. A container-local identity means a new DID on every restart --
+# a new stranger on the mesh each time, while peers still resolve the dead one.
+export SPARTAN_MESH_STATE="${SPARTAN_MESH_STATE:-/app/identity/.spartan_mesh.json}"
+mkdir -p "$(dirname "$SPARTAN_MESH_STATE")"
+
+# Mint / load the shared mesh identity, and re-assert it with the home node
+# (idempotent), before either direction starts.
+python3 -c "import sys; sys.path.insert(0,'Tools'); import SpartanRadio; SpartanRadio.ensure_registered(); print('[entity] mesh identity ready')"
 
 # Inbound bridge (background): mesh inbox -> alerts/*.alert for the FileWatcher.
 # --config goes AFTER `bridge`: the bridge subparser also declares --config, so
 # a top-level --config is shadowed by its None default.
-python3 Tools/macula_radio.py bridge --config Tools/.spartan_mesh.json --alerts-dir alerts &
+python3 Tools/macula_radio.py bridge --config "$SPARTAN_MESH_STATE" --alerts-dir alerts &
 
 # The entity: headless autonomous cognition on Groq. PID 1 -> container lifecycle.
 exec python3 spartan.py --headless

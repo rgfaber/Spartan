@@ -37,9 +37,41 @@ from macula_radio import new_keypair, did_from_pub, sign, register as _mr_regist
 # ---------------------------------------------------------------- CONFIG
 MY_NAME = os.environ.get("SPARTAN_MESH_NAME", "NewEntity")
 SERVICE_URL = os.environ.get("SPARTAN_MESH_URL", "http://127.0.0.1:8471")
-STATE_FILE = os.path.join(_HERE, ".spartan_mesh.json")
+# The mesh identity (Ed25519 private key + UCAN) IS the entity's name on the
+# mesh: lose it and the entity comes back as a stranger with a fresh DID, while
+# its old registration lingers and peers resolve the dead one. Point
+# SPARTAN_MESH_STATE at a volume so the identity outlives the container.
+STATE_FILE = os.environ.get(
+    "SPARTAN_MESH_STATE", os.path.join(_HERE, ".spartan_mesh.json"))
 
 # ---------------------------------------------------------------- identity
+
+def _save(cfg):
+    d = os.path.dirname(os.path.abspath(STATE_FILE))
+    if d:
+        os.makedirs(d, exist_ok=True)
+    with open(STATE_FILE, "w") as f:
+        json.dump(cfg, f)
+    os.chmod(STATE_FILE, 0o600)      # holds the private key
+    return cfg
+
+
+def ensure_registered():
+    """Load (or mint) the identity, then re-assert it with the home node.
+
+    Called once at entity boot. Registration is idempotent: on the same DID the
+    node's aggregate rejects the duplicate and simply re-mints the UCAN, so this
+    is cheap when the node already knows us and it is the self-heal when it does
+    not (fresh node, or one whose data was wiped).
+    """
+    cfg = _load_or_register()
+    try:
+        return _refresh(cfg)
+    except Exception as e:                                     # noqa: BLE001
+        print(f"[SpartanRadio] re-assert failed ({e}); using cached UCAN",
+              file=sys.stderr)
+        return cfg
+
 
 def _load_or_register():
     if os.path.exists(STATE_FILE):
@@ -60,9 +92,7 @@ def _load_or_register():
     r.raise_for_status()
     cfg = {"service_url": SERVICE_URL, "entity_name": MY_NAME, "did": did,
            "priv_hex": priv.hex(), "ucan": r.json()["ucan"]}
-    with open(STATE_FILE, "w") as f:
-        json.dump(cfg, f)
-    return cfg
+    return _save(cfg)
 
 
 def _refresh(cfg):
@@ -80,9 +110,7 @@ def _refresh(cfg):
     r = requests.post(cfg["service_url"] + "/v1/register", json=body, timeout=30)
     r.raise_for_status()
     cfg["ucan"] = r.json()["ucan"]
-    with open(STATE_FILE, "w") as f:
-        json.dump(cfg, f)
-    return cfg
+    return _save(cfg)
 
 
 def _headers(cfg):

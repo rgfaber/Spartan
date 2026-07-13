@@ -240,11 +240,43 @@ def _ts():
     return datetime.datetime.now().strftime("%Y%m%d_%H%M%S_%f")
 
 
+def sender_id(sender):
+    """Filename-safe sender id.
+
+    Spartan's FileWatcher parses the sender out of `{SENDER_ID}_{subject}.alert`
+    by splitting on the FIRST underscore, so the id itself must contain none —
+    and it must equal the id in alerts/.whitelist or the message is dropped.
+    """
+    return "".join(c if c.isalnum() or c in "-." else "-" for c in sender)
+
+
+def ensure_whitelisted(alerts_dir, sender, rate_limit=30):
+    """Add a mesh peer to alerts/.whitelist if it isn't there yet.
+
+    The whitelist was built for the file/scp world, where anything that can
+    write to alerts/ gets a hearing. On the mesh the node already authenticated
+    the sender (UCAN) before it ever reached this inbox, so a mesh peer is
+    authorized by construction — but FileWatcher rejects anything not listed
+    (secure by default), so the bridge keeps the list in sync with the registry.
+    """
+    sid = sender_id(sender)
+    wl = os.path.join(alerts_dir, ".whitelist")
+    os.makedirs(alerts_dir, exist_ok=True)
+    if os.path.exists(wl):
+        with open(wl, encoding="utf-8") as f:
+            for line in f:
+                if line.strip() and line.split("|")[0].strip() == sid:
+                    return sid
+    with open(wl, "a", encoding="utf-8") as f:
+        f.write(f"{sid}|rate_limit={rate_limit}|mesh=true\n")
+    print(f"[macula_radio] whitelisted mesh peer {sid}")
+    return sid
+
+
 def write_alert(alerts_dir, sender, body):
     """Write an incoming message as a .alert file for Spartan's FileWatcher."""
-    os.makedirs(alerts_dir, exist_ok=True)
-    safe = "".join(c if c.isalnum() or c in "-_." else "_" for c in sender)
-    path = os.path.join(alerts_dir, f"{safe}_{_ts()}.alert")
+    sid = ensure_whitelisted(alerts_dir, sender)
+    path = os.path.join(alerts_dir, f"{sid}_{_ts()}.alert")
     with open(path, "w", encoding="utf-8") as f:
         f.write(body)
     return path
@@ -272,6 +304,13 @@ def do_bridge(args):
                         continue
                     msg = json.loads(raw[len(b"data: "):])
                     frm = msg.get("from", "unknown")
+                    if frm not in by_did:
+                        # A peer that registered after this stream opened. Look
+                        # again rather than fall back to the raw DID: the DID
+                        # would land in the alert filename, FileWatcher would
+                        # parse "did" as the sender, and the message would be
+                        # dropped as unwhitelisted.
+                        by_did, _ = resolve_peers(cfg)
                     name = by_did.get(frm) or frm
                     tag = "broadcast" if msg.get("broadcast") else "message"
                     body = msg.get("body", "")

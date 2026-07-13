@@ -19,7 +19,12 @@ printf 'GEMINI_API_KEY=%s\n' "$GEMINI_API_KEY" \
   | ssh -o BatchMode=yes "rl@${HOST}" 'install -m600 /dev/stdin "$HOME/.spartan-entity.env"'
 
 # 2. Run the entity (host net -> reaches local node :8471 + ollama :11434).
-#    Soul/ + ltm_db/ + alerts/ persist on /bulk0 so the mind survives restarts.
+#    Soul/ + ltm_db/ + alerts/ persist on /bulk0 so the mind survives restarts,
+#    and identity/ carries the Ed25519 key + UCAN so it survives as the SAME
+#    mind: a fresh DID per restart leaves stale registrations behind and peers
+#    resolving a name to an entity that no longer listens.
+#    No watchtower label: this fleet is rolled deliberately, not cycled under
+#    the entities' feet.
 ssh -o BatchMode=yes "rl@${HOST}" "NAME='${NAME}' NODE_URL='${NODE_URL}' bash -s" <<'REMOTE'
 set -e
 data="/bulk0/hecate/spartan-entity/${NAME}"
@@ -28,9 +33,11 @@ docker run -d --name "spartan-entity-${NAME}" --restart unless-stopped --network
   --env-file "$HOME/.spartan-entity.env" \
   -e SPARTAN_MESH_URL="${NODE_URL}" \
   -e SPARTAN_MESH_NAME="${NAME}" \
+  -e SPARTAN_MESH_STATE=/app/identity/.spartan_mesh.json \
   -v "${data}/Soul:/app/Soul" \
   -v "${data}/ltm_db:/app/ltm_db" \
   -v "${data}/alerts:/app/alerts" \
+  -v "${data}/identity:/app/identity" \
   localhost/spartan-entity:dev >/dev/null
 echo "  spartan-entity-${NAME} launched (home ${NODE_URL})"
 REMOTE
