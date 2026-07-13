@@ -12,11 +12,20 @@ set -euo pipefail
 HOST="${1:?usage: deploy-mesh-entity.sh <host> <mesh-name> [node-url]}"
 NAME="${2:?usage: deploy-mesh-entity.sh <host> <mesh-name> [node-url]}"
 NODE_URL="${3:-http://127.0.0.1:8471}"
-: "${GEMINI_API_KEY:?set GEMINI_API_KEY in the environment}"
 
 # 1. Place the secret in a 0600 env-file on the node (stdin, not argv).
-printf 'GEMINI_API_KEY=%s\n' "$GEMINI_API_KEY" \
-  | ssh -o BatchMode=yes "rl@${HOST}" 'install -m600 /dev/stdin "$HOME/.spartan-entity.env"'
+#    Optional on a redeploy: if the key is already on the node and not in this
+#    shell, keep the one that is there rather than demanding it again (fewer
+#    trips through a shell history for a credential).
+if [ -n "${GEMINI_API_KEY:-}" ]; then
+  printf 'GEMINI_API_KEY=%s\n' "$GEMINI_API_KEY" \
+    | ssh -o BatchMode=yes "rl@${HOST}" 'install -m600 /dev/stdin "$HOME/.spartan-entity.env"'
+elif ssh -o BatchMode=yes "rl@${HOST}" 'test -s "$HOME/.spartan-entity.env"'; then
+  echo "  reusing the GEMINI_API_KEY already on ${HOST}"
+else
+  echo "GEMINI_API_KEY is not set here and no env-file exists on ${HOST}" >&2
+  exit 1
+fi
 
 # 2. Run the entity (host net -> reaches local node :8471 + ollama :11434).
 #    Soul/ + ltm_db/ + alerts/ persist on /bulk0 so the mind survives restarts,
