@@ -50,12 +50,24 @@ SPEECH = None
 MIN_INTERVAL_S = 1.5
 MAX_SUMMARY = 400
 
+# Machine bookkeeping that wears a name-like prefix and slips past SPEECH:
+# event/action ids, token counts, context sizes. Never a mind talking — and it
+# floods the agora ("EventID=3589 | ActionID=0" over and over). Drop it.
+NOISE = re.compile(
+    r"EventID\s*=|ActionID\s*=|Total\s*[≈=]|\bin\s*=\s*\d+|\bout\s*=\s*\d+"
+    r"|^\s*[\d|\s]+$",
+    re.IGNORECASE,
+)
+
 
 def classify(line):
     if SPEECH:
         m = SPEECH.match(line)
         if m:
-            return "speech", m.group("what").strip()[:MAX_SUMMARY]
+            what = m.group("what").strip()
+            if NOISE.search(what):
+                return None, None
+            return "speech", what[:MAX_SUMMARY]
 
     for pattern, kind in PATTERNS:
         m = pattern.search(line)
