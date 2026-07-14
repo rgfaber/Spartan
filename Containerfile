@@ -16,13 +16,17 @@ RUN apt-get update \
 # Cognition = Gemini (google-generativeai; Groq's free-tier 12k TPM can't fit
 # Spartan's ~55k-token cycle -- the Genesis Core alone is ~50k). openai kept for
 # the Groq/OpenAI providers. Plus the bridge's requests / cryptography + pyyaml.
-# NO lancedb: the beam-cluster Celerons (Goldmont, no AVX) SIGILL on LanceDB's
-# AVX2 Rust core, and the SIGILL is uncatchable. Omitting the package lets
-# ltm.py's `try: import lancedb` degrade to lancedb=None cleanly; LTM is off
-# in spartan_config.yaml. Add lancedb back only on AVX2 hosts for long-lived
-# entities that need deep vector recall.
+#
+# LanceDB (LTM's vector store) is gated behind WITH_LANCEDB, default off: the
+# beam-cluster Celerons (Goldmont, no AVX) SIGILL on LanceDB's AVX2 Rust core,
+# and the SIGILL is uncatchable, so ltm.py's `try: import lancedb` must degrade
+# to lancedb=None (LTM off in spartan_config.yaml). Build with
+# `--build-arg WITH_LANCEDB=1` on an AVX2 host (e.g. msi00) for a long-lived
+# entity that needs deep vector recall, e.g. the scribe.
+ARG WITH_LANCEDB=0
 RUN pip install --no-cache-dir \
-    pyyaml openai google-generativeai requests cryptography
+    pyyaml openai google-generativeai requests cryptography \
+    && if [ "$WITH_LANCEDB" = "1" ]; then pip install --no-cache-dir lancedb; fi
 
 COPY . /app
 RUN chmod +x /app/entrypoint.sh
