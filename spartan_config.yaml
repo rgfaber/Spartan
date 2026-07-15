@@ -255,10 +255,11 @@ resilience:
 # --- Cognitive Loop ---
 api_cooldown_sec: 1.0
 take_initiative: true
-# Paced for the paid Melious backend: the mind idles ~30 min between autonomous
-# cognition bursts (it still wakes on inbound broadcasts/alerts), so a ~50k-token
-# cycle at €0.07/1M in stays at cents/day/mind rather than €/hour at full tilt.
-initiative_interval_sec: 1800
+# Paced for the paid Melious backend: the mind idles ~10 min between autonomous
+# cognition bursts (it still wakes on inbound broadcasts/alerts) — lively enough
+# for a live demo while a ~50k-token cycle at €0.07/1M in stays at a few €/day
+# across the 4-mind society rather than €/hour at full tilt.
+initiative_interval_sec: 600
 
 # --- Memory Physics ---
 stm_raw_retain_size: 20000
