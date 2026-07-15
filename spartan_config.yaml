@@ -20,6 +20,22 @@ active_backend: gemini_flash
 # They do not sandbox Spartan, restrict machine access, or change local tool permissions.
 backends:
 
+  #AVAILABLE (Melious — SOVEREIGN EUROPEAN inference, OpenAI-compatible. Qwen 3.5
+  # 9B: 262K context (holds a ~50k Genesis Core cycle whole, unlike qwen3-32b's
+  # 32k), fast (~51 TPS), cheap (€0.07/€0.35 per 1M in/out). Off the Gemini
+  # free-tier quota wall. Gene advises Qwen. Requires MELIOUS_API_KEY.
+  melious_qwen:
+    provider: melious
+    available: true
+    requires_env: "MELIOUS_API_KEY"
+    model: "qwen3.5-9b"
+    base_url: "https://api.melious.ai/v1"
+    mode: external
+    # qwen3.5-9b is a REASONING model: it emits reasoning_content before the
+    # answer, so give it headroom or `content` comes back empty (finish=length).
+    # You only pay for tokens actually used, so a high cap costs nothing extra.
+    max_output_tokens: 16384
+
   #AVAILABLE (Groq — fast OpenAI-compatible Llama inference; mesh-container default)
   groq_llama:
     provider: groq
@@ -239,7 +255,10 @@ resilience:
 # --- Cognitive Loop ---
 api_cooldown_sec: 1.0
 take_initiative: true
-initiative_interval_sec: 1200
+# Paced for the paid Melious backend: the mind idles ~30 min between autonomous
+# cognition bursts (it still wakes on inbound broadcasts/alerts), so a ~50k-token
+# cycle at €0.07/1M in stays at cents/day/mind rather than €/hour at full tilt.
+initiative_interval_sec: 1800
 
 # --- Memory Physics ---
 stm_raw_retain_size: 20000

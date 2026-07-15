@@ -1584,6 +1584,32 @@ class GroqProvider(GrokProvider):
         gui_print(f"GroqProvider initialized: {self.model}", "system")
 
 
+class MeliousProvider(GrokProvider):
+    """Melious API provider -- sovereign European AI, OpenAI-compatible.
+
+    Melious (https://melious.ai) serves 60+ open-weight models (Qwen, DeepSeek,
+    GLM, Mistral, ...) behind ONE OpenAI-compatible endpoint. Reuses
+    GrokProvider's generate_response verbatim; only the endpoint + key differ.
+    Added by the hecate/Macula mesh integration to give the society an
+    affordable EU backend off the Gemini free-tier quota. See NOTICE.
+    """
+
+    def __init__(self, backend_config=None):
+        if not openai_lib:
+            raise ImportError("openai package not installed. Run: pip install openai")
+        api_key = os.getenv("MELIOUS_API_KEY")
+        if not api_key:
+            raise ValueError("MELIOUS_API_KEY environment variable not set.")
+        bc = backend_config or {}
+        self.model = bc.get("model", "qwen3.5-9b")
+        self.max_output_tokens = bc.get("max_output_tokens", 8192)
+        self.client = openai_lib.OpenAI(
+            api_key=api_key,
+            base_url=bc.get("base_url", "https://api.melious.ai/v1"),
+        )
+        gui_print(f"MeliousProvider initialized: {self.model}", "system")
+
+
 def get_provider(backend_config=None):
     """Factory: returns the configured LLM provider."""
     bc = backend_config or {}
@@ -1602,6 +1628,8 @@ def get_provider(backend_config=None):
         return GrokProvider(bc)
     elif provider == "groq":
         return GroqProvider(bc)
+    elif provider == "melious":
+        return MeliousProvider(bc)
     else:
         raise ValueError(f"Unsupported provider: {provider}")
 
