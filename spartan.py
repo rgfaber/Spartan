@@ -1464,6 +1464,55 @@ class OpenAIProvider(LLMProvider):
                 "raw_response": str(e)
             }
 
+# --- Melious environmental footprint: the society's true cognition cost ---
+# Melious (sovereign-EU inference) returns per-call energy_kwh / carbon_g_co2 /
+# water_liters. Accumulate it per mind, persisted in Soul/ (survives restarts),
+# and log a [FOOTPRINT] line the activity_reporter forwards to the agora — so the
+# society is carbon-TRANSPARENT: every thought's real cost, shown openly.
+_FOOTPRINT_PATH = os.path.join("Soul", "footprint.json")
+_footprint_seen = 0
+
+
+def _footprint_dict(impact):
+    if isinstance(impact, dict):
+        return impact
+    dump = getattr(impact, "model_dump", None)
+    if callable(dump):
+        try:
+            return dump()
+        except Exception:
+            return {}
+    return getattr(impact, "__dict__", {}) or {}
+
+
+def _accumulate_footprint(impact):
+    global _footprint_seen
+    d = _footprint_dict(impact)
+    if not d:
+        return
+    try:
+        cur = {}
+        if os.path.exists(_FOOTPRINT_PATH):
+            with open(_FOOTPRINT_PATH) as f:
+                cur = json.load(f)
+        cur["kwh"] = round(cur.get("kwh", 0.0) + float(d.get("energy_kwh", 0) or 0), 6)
+        cur["co2_g"] = round(cur.get("co2_g", 0.0) + float(d.get("carbon_g_co2", 0) or 0), 4)
+        cur["water_l"] = round(cur.get("water_l", 0.0) + float(d.get("water_liters", 0) or 0), 4)
+        cur["calls"] = cur.get("calls", 0) + 1
+        os.makedirs(os.path.dirname(_FOOTPRINT_PATH) or ".", exist_ok=True)
+        with open(_FOOTPRINT_PATH, "w") as f:
+            json.dump(cur, f)
+        _footprint_seen += 1
+        if _footprint_seen % 20 == 1:
+            gui_print(
+                f"[FOOTPRINT] {cur['kwh']:.4f} kWh · {cur['co2_g']:.1f} g CO2 · "
+                f"{cur['water_l']:.3f} L water · {cur['calls']} thoughts on Melious (sovereign EU)",
+                "system",
+            )
+    except Exception:
+        pass
+
+
 class GrokProvider(LLMProvider):
     """xAI Grok API provider with session-pinned prompt caching."""
 
@@ -1537,6 +1586,14 @@ class GrokProvider(LLMProvider):
                 "output_tokens": completion_tok,
                 "frontier_msgs": None,
             })
+
+            # Melious returns per-call environmental impact — accumulate the
+            # society's true cognition cost. No-op for backends that don't
+            # (Groq/Grok/OpenAI: the field is absent).
+            _accumulate_footprint(
+                getattr(response, "environment_impact", None)
+                or (getattr(response, "model_extra", None) or {}).get("environment_impact")
+            )
 
             raw_text = strip_think_block(raw_text)
             raw_text = defuse_poison(raw_text)

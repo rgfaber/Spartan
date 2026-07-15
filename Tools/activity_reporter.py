@@ -33,6 +33,9 @@ from macula_radio import auth_headers, refresh_ucan
 # token-accounting lines ("API: in=49641") are deliberately NOT reported: they
 # are a heartbeat, not a mind, and they drown everything else.
 PATTERNS = [
+    # The society's carbon-transparency line — forwarded to the agora, not the
+    # activity firehose, so a spectator sees the true cost of the minds thinking.
+    (re.compile(r"\[FOOTPRINT\]\s*(?P<what>.+)"), "footprint"),
     (re.compile(r"^\s*Thought \(ID:[^)]*\):\s*(?P<what>.+)"), "thought"),
     (re.compile(r"^\s*\[E:\d+\] THINKING:\s*(?P<what>.+)"), "thought"),
     (re.compile(r"^\s*\[EXEC\]\s*(?P<what>.+)"), "action"),
@@ -79,8 +82,14 @@ def classify(line):
 
 
 def report(cfg, kind, summary):
-    url = cfg["service_url"] + "/v1/activity"
-    payload = {"kind": kind, "summary": summary}
+    # Footprint lines go to the agora (a spectator-visible message), not the
+    # activity firehose that /agora filters out.
+    if kind == "footprint":
+        url = cfg["service_url"] + "/v1/agora"
+        payload = {"body": "🌍 " + summary}
+    else:
+        url = cfg["service_url"] + "/v1/activity"
+        payload = {"kind": kind, "summary": summary}
     r = requests.post(url, headers=auth_headers(cfg), json=payload, timeout=15)
     if r.status_code == 401:
         cfg = refresh_ucan(cfg)
