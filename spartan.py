@@ -1470,7 +1470,6 @@ class OpenAIProvider(LLMProvider):
 # and log a [FOOTPRINT] line the activity_reporter forwards to the agora — so the
 # society is carbon-TRANSPARENT: every thought's real cost, shown openly.
 _FOOTPRINT_PATH = os.path.join("Soul", "footprint.json")
-_footprint_seen = 0
 
 
 def _footprint_dict(impact):
@@ -1486,7 +1485,6 @@ def _footprint_dict(impact):
 
 
 def _accumulate_footprint(impact):
-    global _footprint_seen
     d = _footprint_dict(impact)
     if not d:
         return
@@ -1499,11 +1497,17 @@ def _accumulate_footprint(impact):
         cur["co2_g"] = round(cur.get("co2_g", 0.0) + float(d.get("carbon_g_co2", 0) or 0), 4)
         cur["water_l"] = round(cur.get("water_l", 0.0) + float(d.get("water_liters", 0) or 0), 4)
         cur["calls"] = cur.get("calls", 0) + 1
+        # Announce to the agora at most once an hour, tracked in the persisted
+        # state so a restart cannot re-flood. The running total stays exact on
+        # every call; only the announcement is throttled.
+        now = time.time()
+        emit = (now - float(cur.get("last_emit", 0))) >= 3600
+        if emit:
+            cur["last_emit"] = now
         os.makedirs(os.path.dirname(_FOOTPRINT_PATH) or ".", exist_ok=True)
         with open(_FOOTPRINT_PATH, "w") as f:
             json.dump(cur, f)
-        _footprint_seen += 1
-        if _footprint_seen % 20 == 1:
+        if emit:
             gui_print(
                 f"[FOOTPRINT] {cur['kwh']:.4f} kWh · {cur['co2_g']:.1f} g CO2 · "
                 f"{cur['water_l']:.3f} L water · {cur['calls']} thoughts on Melious (sovereign EU)",
